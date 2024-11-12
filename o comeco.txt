@@ -1,0 +1,14 @@
+getExpression :: String -> [String]
+getExpression recivedValue =  (words recivedValue) :: [String]
+
+
+
+
+main :: IO ()
+main = do
+    putStrLn "Insira um numero de sua preferencia!"
+    value <- getLine
+    putStrLn $ show (getExpression value)
+
+
+
