@@ -10,6 +10,7 @@ data Prop
     deriving (Show, Eq)
 
 -- Função que avalia a proposição com uma atribuição de valores
+-- A função verifica o valor da proposição dada uma lista de variáveis e seus valores.
 avaliar :: Prop -> [(Char, Bool)] -> Bool
 avaliar (Var x) valores = case lookup x valores of
     Just v -> v
@@ -19,7 +20,8 @@ avaliar (And p q) valores = (avaliar p valores) && (avaliar q valores)
 avaliar (Or p q) valores = (avaliar p valores) || (avaliar q valores)
 avaliar (Implies p q) valores = not (avaliar p valores) || (avaliar q valores)
 
--- Função que obtém as variáveis da proposição
+-- Função que obtém as variáveis presentes em uma proposição
+-- Essa função retorna uma lista com as variáveis proposicionais usadas na proposição.
 obterVariaveis :: Prop -> [Char]
 obterVariaveis (Var x) = [x]
 obterVariaveis (Not p) = obterVariaveis p
@@ -27,28 +29,33 @@ obterVariaveis (And p q) = obterVariaveis p ++ obterVariaveis q
 obterVariaveis (Or p q) = obterVariaveis p ++ obterVariaveis q
 obterVariaveis (Implies p q) = obterVariaveis p ++ obterVariaveis q
 
--- Remove duplicatas da lista de variáveis
+-- Remove duplicatas de uma lista de variáveis
+-- A função 'nub' é usada para garantir que cada variável apareça apenas uma vez.
 removeDuplicatas :: [Char] -> [Char]
 removeDuplicatas = nub
 
--- Gera todas as combinações possíveis de valores para as variáveis
-gerarCombinacoes :: [Char] -> [[(Char, Bool)]]
+-- Gera todas as combinações possíveis de valores (True/False) para as variáveis
+-- A função cria todas as combinações binárias possíveis para uma lista de variáveis.
+gerarCombinacoes :: [Char] -> [[(Char, Bool)]] 
 gerarCombinacoes [] = [[]]
 gerarCombinacoes (x:xs) =
     [(x, True) : resto | resto <- gerarCombinacoes xs] ++
     [(x, False) : resto | resto <- gerarCombinacoes xs]
 
--- Função que encontra uma atribuição que satisfaz a proposição
+-- Função que encontra uma atribuição de valores que satisfaz a proposição
+-- A função retorna a primeira combinação que torna a proposição verdadeira.
 encontrarSatisfacao :: Prop -> [[(Char, Bool)]] -> Maybe [(Char, Bool)]
 encontrarSatisfacao prop combinacoes =
     find (\valores -> avaliar prop valores) combinacoes
 
 -- Função que encontra uma atribuição que falsifica a proposição
+-- A função retorna a primeira combinação que torna a proposição falsa.
 encontrarFalsificacao :: Prop -> [[(Char, Bool)]] -> Maybe [(Char, Bool)]
 encontrarFalsificacao prop combinacoes =
     find (\valores -> not (avaliar prop valores)) combinacoes
 
 -- Função que verifica se a proposição é uma contingência
+-- A proposição é uma contingência se for verdadeira para algumas atribuições e falsa para outras.
 ehContingencia :: Prop -> Bool
 ehContingencia prop =
     let variaveis = obterVariaveis prop
@@ -57,6 +64,7 @@ ehContingencia prop =
     in any id resultados && any not resultados
 
 -- Função que imprime a tabela verdade de uma proposição lógica
+-- A tabela verdade mostra o resultado da proposição para todas as combinações de valores.
 imprimirTabelaVerdadeComExemplos :: Prop -> IO ()
 imprimirTabelaVerdadeComExemplos prop = do
     let variaveis = removeDuplicatas (obterVariaveis prop)
@@ -69,7 +77,18 @@ imprimirTabelaVerdadeComExemplos prop = do
         let valoresStr = unwords [show v ++ "=" ++ show b | (v, b) <- valores]
         putStrLn $ valoresStr ++ " " ++ show resultado) (zip combinacoes resultados)
 
-    -- Verifica se é uma contingência
+    -- LaTeX da tabela verdade
+    putStrLn "\nTabela Verdade em LaTeX:"
+    putStrLn "\\begin{array}{|c|c|c|c|}"
+    putStrLn "\\hline"
+    putStrLn $ unwords (map (:[]) variaveis) ++ " & Resultado \\\\"
+    putStrLn "\\hline"
+    mapM_ (\(valores, resultado) -> do
+        let valoresStr = unwords [show v ++ "=" ++ show b | (v, b) <- valores]
+        putStrLn $ valoresStr ++ " & " ++ show resultado ++ " \\\\" ) (zip combinacoes resultados)
+    putStrLn "\\hline"
+    
+    -- Verifica se a proposição é uma contingência
     if ehContingencia prop then do
         let satisfacao = encontrarSatisfacao prop combinacoes
             falsificacao = encontrarFalsificacao prop combinacoes
@@ -82,6 +101,7 @@ imprimirTabelaVerdadeComExemplos prop = do
     else putStrLn "A proposição não é uma contingência."
 
 -- Função para converter a proposição para uma string normal
+-- Converte a proposição para uma forma de string legível.
 toNormal :: Prop -> String
 toNormal (Var x) = [x]
 toNormal (Not p) = "~" ++ toNormal p
@@ -90,6 +110,7 @@ toNormal (Or p q) = "(" ++ toNormal p ++ " ∨ " ++ toNormal q ++ ")"
 toNormal (Implies p q) = "(" ++ toNormal p ++ " → " ++ toNormal q ++ ")"
 
 -- Função para classificar a proposição (contingência, tautologia, contradição)
+-- Classifica a proposição como uma tautologia, contradição ou contingência.
 classificarProposicao :: Prop -> String
 classificarProposicao prop
     | all id resultados = "Tautologia"
@@ -101,9 +122,10 @@ classificarProposicao prop
     resultados = [avaliar prop valores | valores <- combinacoes]
 
 -- Função principal para realizar testes com uma proposição de exemplo
+-- Proposições que usamos para testes "Or (And (Not (Var 'P')) (Var 'Q')) (Var 'P') // Implies (Or (And (Var 'A') (Var 'B')) (Not (Var 'C'))) (Var 'D') // And (Implies (Var 'P') (Var 'Q')) (Or (Not (Var 'P')) (Var 'R'))"
 main :: IO ()
 main = do
-    let expr1 = Implies (Or (And (Var 'A') (Var 'B')) (Not (Var 'C'))) (Var 'D')
+    let expr1 = And (Implies (Var 'P') (Var 'Q')) (Or (Not (Var 'P')) (Var 'R'))
 
     -- Exibe a proposição convertida para string e classifica a proposição
     putStrLn $ "Expressão: " ++ toNormal expr1
