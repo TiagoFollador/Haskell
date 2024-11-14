@@ -243,6 +243,7 @@ imprimirTabelaVerdadeComExemplos operadoresLogicos = do
     let variaveis = removeDuplicatas (obterVariaveis operadoresLogicos)
         combinacoes = gerarCombinacoes variaveis
         resultados = [avaliar operadoresLogicos valores | valores <- combinacoes]
+        numVariaveis = length variaveis
 
     -- Imprime a tabela verdade
     putStrLn $ unwords (map (:[]) variaveis ++ ["Resultado"])
@@ -251,16 +252,18 @@ imprimirTabelaVerdadeComExemplos operadoresLogicos = do
         putStrLn $ valoresStr ++ " " ++ show resultado) (zip combinacoes resultados)
 
     -- LaTeX da tabela verdade
+    let latexHeader = "\\begin{array}{" ++ concat (replicate numVariaveis "|c") ++ "|c|}"
     putStrLn "\nTabela Verdade em LaTeX:"
-    putStrLn "\\begin{array}{|c|c|c|c|}"
+    putStrLn latexHeader
     putStrLn "\\hline"
     putStrLn $ unwords (map (:[]) variaveis) ++ " & Resultado \\\\"
     putStrLn "\\hline"
     mapM_ (\(valores, resultado) -> do
-        let valoresStr = unwords [show v ++ "=" ++ show b | (v, b) <- valores]
+        let valoresStr = unwords [show b | (_, b) <- valores]
         putStrLn $ valoresStr ++ " & " ++ show resultado ++ " \\\\" ) (zip combinacoes resultados)
     putStrLn "\\hline"
-    
+    putStrLn "\\end{array}"
+
     -- Verifica se a proposição é uma contingência
     if ehContingencia operadoresLogicos then do
         let satisfacao = encontrarSatisfacao operadoresLogicos combinacoes
@@ -289,7 +292,7 @@ toLaTeX (Biconditional p q) = "(" ++ toLaTeX p ++ " \\leftrightarrow " ++ toLaTe
 -- Converte a proposição para uma forma de string legível.
 toNormal :: VariavelLogica -> String
 toNormal (Var x) = [x]
-toNormal (Not p) = "~" ++ toNormal p
+toNormal (Not p) = "¬" ++ toNormal p
 toNormal (And p q) = "(" ++ toNormal p ++ " ∧ " ++ toNormal q ++ ")"
 toNormal (Or p q) = "(" ++ toNormal p ++ " ∨ " ++ toNormal q ++ ")"
 toNormal (Implies p q) = "(" ++ toNormal p ++ " → " ++ toNormal q ++ ")"
