@@ -273,6 +273,18 @@ imprimirTabelaVerdadeComExemplos operadoresLogicos = do
             Nothing -> putStrLn "Nenhuma atribuição falsifica a expressão."
     else putStrLn "A proposição não é uma contingência."
 
+
+-- Função para converter a proposição para latex
+-- Converte a proposição para latex.
+toLaTeX :: VariavelLogica -> String
+toLaTeX (Var x) = [x]
+toLaTeX (Not p) = "\\neg " ++ toLaTeX p
+toLaTeX (And p q) = "(" ++ toLaTeX p ++ " \\land " ++ toLaTeX q ++ ")"
+toLaTeX (Or p q) = "(" ++ toLaTeX p ++ " \\lor " ++ toLaTeX q ++ ")"
+toLaTeX (Implies p q) = "(" ++ toLaTeX p ++ " \\rightarrow " ++ toLaTeX q ++ ")"
+toLaTeX (Biconditional p q) = "(" ++ toLaTeX p ++ " \\leftrightarrow " ++ toLaTeX q ++ ")"
+
+
 -- Função para converter a proposição para uma string normal
 -- Converte a proposição para uma forma de string legível.
 toNormal :: VariavelLogica -> String
@@ -306,6 +318,7 @@ main = do
         Right expressao -> do
             putStrLn $ "Expressão lógica parseada: " ++ show expressao
             putStrLn $ "Expressão em formato normal: " ++ toNormal expressao
+            putStrLn $ "Expressão em latex: " ++ "$$" ++ toLaTeX expressao ++ "$$"
             putStrLn $ "Classificação: " ++ classificarProposicao expressao
             putStrLn "Tabela Verdade com exemplos:"
             imprimirTabelaVerdadeComExemplos expressao
