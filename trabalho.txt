@@ -1,14 +1,85 @@
-getExpression :: String -> [String]
-getExpression recivedValue =  (words recivedValue) :: [String]
+import Data.Char (isUpper)
+
+{-
+
+Operarores logicos que iremos utilizar
+para renomear os operadores encontrados
+por esses abaixo
+
+-}
+data OperadoresLogicos
+    = OPVar Char                 -- Variável proposicional
+    | OPAnd                      -- Conjunção (∧)
+    | OPOr                       -- Disjunção (∨)
+    | OPNot                      -- Negação (¬)
+    | OPImplies                  -- Implicação (→)
+    | OPBiconditional            -- Bicondicional (↔)
+    | OPAbreParenteses           -- Parêntese de abertura
+    | OPFechaParenteses          -- Parêntese de fechamento
+    deriving (Eq, Show)
+
+{-
+
+definicao das variaveis logicas
+-}
+data VariavelLogica
+    = Var Char                -- Variável proposicional
+    | And VariavelLogica VariavelLogica    -- Conjunção (∧)
+    | Or VariavelLogica VariavelLogica     -- Disjunção (∨)
+    | Not VariavelLogica                -- Negação (¬)
+    | Implies VariavelLogica VariavelLogica  -- Implicação (→)
+    | Biconditional VariavelLogica VariavelLogica  -- Bicondicional (↔)
+    deriving (Eq, Show)
 
 
 
+{-
 
+essa funcao ira realizar a transformacao de operadores logicos 
+em linguagem normal para o haskell(linguagem de programacao)
+
+ex: A ∧ B vira [OPVar, OPAnd, OPVar]
+-- h: head ; t: tail (que nem o construtor de lista em lambda, onde h é o elemento 
+e t é o resto da lista )
+
+-- operador : (identificado apos nossos OperadoresLogicos) representa o cons (construtor de lista)
+colocando o elemento que antecede ele adiante da lista que sucede
+
+
+-}
+parseToOperadoresLogicos :: String -> Either String [OperadoresLogicos]
+parseToOperadoresLogicos [] = Right []
+parseToOperadoresLogicos (h:t) 
+    | take 3 (h:t) == "and"  = fmap (OPAnd :) (parseToOperadoresLogicos (drop 3 t))
+    | take 2 (h:t) == "or"   = fmap (OPOr :) (parseToOperadoresLogicos (drop 2 t))
+    | take 3 (h:t) == "not"  = fmap (OPNot :) (parseToOperadoresLogicos (drop 3 t))
+    | take 2 (h:t) == "=>"   = fmap (OPImplies :) (parseToOperadoresLogicos (drop 2 t))
+    | take 3 (h:t) == "<=>"  = fmap (OPBiconditional :) (parseToOperadoresLogicos (drop 3 t))
+    | h == '∧'                = fmap (OPAnd :) (parseToOperadoresLogicos t)
+    | h == '∨'                = fmap (OPOr :) (parseToOperadoresLogicos t)
+    | h == '¬'                = fmap (OPNot :) (parseToOperadoresLogicos t)
+    | h == '→'                = fmap (OPImplies :) (parseToOperadoresLogicos t)
+    | h == '↔'                = fmap (OPBiconditional :) (parseToOperadoresLogicos t)
+    | h == '('                = fmap (OPAbreParenteses :) (parseToOperadoresLogicos t)
+    | h == ')'                = fmap (OPFechaParenteses :) (parseToOperadoresLogicos t)
+    | isUpper h               = fmap (OPVar h :) (parseToOperadoresLogicos t)
+    | h == ' '                = parseToOperadoresLogicos t
+    | otherwise               = Left ("Caráter inválido: " ++ [h])
+
+
+-- Função para imprimir a expressão lógica após o parse
+printExpr :: String -> IO ()
+printExpr expr = do
+    let result = parseToOperadoresLogicos expr
+    case result of
+        Right parsed -> print parsed
+        Left err -> putStrLn err
+
+-- Exemplos de teste
 main :: IO ()
 main = do
-    putStrLn "Insira um numero de sua preferencia!"
-    value <- getLine
-    putStrLn $ show (getExpression value)
-
-
-
+    printExpr "A ∧ B"
+    printExpr "A ∨ B"
+    printExpr "¬A → B"
+    printExpr "A ↔ B"
+    printExpr "(A ∧ B) ∨ C"
