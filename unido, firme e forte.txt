@@ -1,0 +1,313 @@
+import Data.List (nub, find)
+
+-- Definição do tipo Prop para proposições lógicas
+
+import Data.Char (isUpper)
+
+{-
+
+Operarores logicos que iremos utilizar
+para renomear os operadores encontrados
+por esses abaixo
+
+-}
+data OperadoresLogicos
+    = OPVar Char                 -- Variável proposicional
+    | OPAnd                      -- Conjunção (∧)
+    | OPOr                       -- Disjunção (∨)
+    | OPNot                      -- Negação (¬)
+    | OPImplies                  -- Implicação (→)
+    | OPBiconditional            -- Bicondicional (↔)
+    | OPAbreParenteses           -- Parêntese de abertura
+    | OPFechaParenteses          -- Parêntese de fechamento
+    deriving (Eq, Show)
+
+{-
+
+definicao das variaveis logicas
+-}
+data VariavelLogica
+    = Var Char                -- Variável proposicional
+    | And VariavelLogica VariavelLogica    -- Conjunção (∧)
+    | Or VariavelLogica VariavelLogica     -- Disjunção (∨)
+    | Not VariavelLogica                -- Negação (¬)
+    | Implies VariavelLogica VariavelLogica  -- Implicação (→)
+    | Biconditional VariavelLogica VariavelLogica  -- Bicondicional (↔)
+    deriving (Eq, Show)
+
+
+
+{-
+
+essa funcao ira realizar a transformacao de operadores logicos 
+em linguagem normal para o haskell(linguagem de programacao)
+
+ex: A ∧ B vira [OPVar 'A', OPAnd, OPVar 'B']
+-- h: head ; t: tail (que nem o construtor de lista em lambda, onde h é o elemento 
+e t é o resto da lista )
+
+-- operador : (identificado apos nossos OperadoresLogicos) representa o cons (construtor de lista)
+colocando o elemento que antecede ele adiante da lista que sucede
+
+
+-}
+parseToOperadoresLogicos :: String -> Either String [OperadoresLogicos]
+parseToOperadoresLogicos [] = Right []
+parseToOperadoresLogicos (h:t) 
+    | take 3 (h:t) == "and"  = fmap (OPAnd :) (parseToOperadoresLogicos (drop 3 t))
+    | take 2 (h:t) == "or"   = fmap (OPOr :) (parseToOperadoresLogicos (drop 2 t))
+    | take 3 (h:t) == "not"  = fmap (OPNot :) (parseToOperadoresLogicos (drop 3 t))
+    | take 2 (h:t) == "=>"   = fmap (OPImplies :) (parseToOperadoresLogicos (drop 2 t))
+    | take 3 (h:t) == "<=>"  = fmap (OPBiconditional :) (parseToOperadoresLogicos (drop 3 t))
+    | h == '∧'                = fmap (OPAnd :) (parseToOperadoresLogicos t)
+    | h == '∨'                = fmap (OPOr :) (parseToOperadoresLogicos t)
+    | h == '¬'                = fmap (OPNot :) (parseToOperadoresLogicos t)
+    | h == '→'                = fmap (OPImplies :) (parseToOperadoresLogicos t)
+    | h == '↔'                = fmap (OPBiconditional :) (parseToOperadoresLogicos t)
+    | h == '('                = fmap (OPAbreParenteses :) (parseToOperadoresLogicos t)
+    | h == ')'                = fmap (OPFechaParenteses :) (parseToOperadoresLogicos t)
+    | isUpper h               = fmap (OPVar h :) (parseToOperadoresLogicos t)
+    | h == ' '                = parseToOperadoresLogicos t
+    | otherwise               = Left ("Caracter inválido: " ++ [h])
+
+{-
+
+Essa funcao é responsavel por interpretar a entrada do usuario e passar para 
+Operadores logicos, colocando-os em uma notacao similar a calculo lambda.
+
+primeiro passa a entrada para uma lista de operadoresLogicos, apos isso, passa
+a lista para o formato de VariavelLogica
+
+A and B fica and (A B) 
+
+
+-}
+parseExpression :: String -> Either String VariavelLogica
+parseExpression expressaoLogicaEntrada = do
+    operadoresLogicos <- parseToOperadoresLogicos expressaoLogicaEntrada
+    toVariavelLogica operadoresLogicos
+
+
+toVariavelLogica :: [OperadoresLogicos] -> Either String VariavelLogica
+toVariavelLogica expressao = parseExpressaoLogica expressao
+
+
+
+{-
+
+    Funcao que recebe o array de Operadores Logicos e passa as demais funcoes 
+    validarem seus casos(nesse ela chama a parseBiconditional, que valida se a expressao possui
+    uma bicondicional, conforme as prioridades)
+
+-}
+parseExpressaoLogica :: [OperadoresLogicos] -> Either String VariavelLogica
+parseExpressaoLogica expressao = case parseBiconditional expressao of
+    Right (expressaoFinal, []) -> Right expressaoFinal
+    Right (_, expressoesNaoProcessadas)   -> Left ("Elementos remanescentes: " ++ show expressoesNaoProcessadas)
+    Left erro        -> Left erro
+
+{-
+
+ordem de prioridades ( bicondicional -> implicação -> disjunção -> conjunção -> negação)
+
+funcoes parse{operador logico} tem como base pegar o array de operadores e retornar
+um either com uma string e tupla.
+
+ele retorna either para a funcao que chama elas, realizar
+um case left(caso erro) right(caso aja certo)
+-}
+
+
+parseBiconditional :: [OperadoresLogicos] -> Either String (VariavelLogica, [OperadoresLogicos])
+parseBiconditional expressao = do
+    (expressaoParcial, restante) <- parseImplies expressao
+    parseRightOperadores expressaoParcial OPBiconditional Biconditional parseBiconditional restante
+    
+parseImplies :: [OperadoresLogicos] -> Either String (VariavelLogica, [OperadoresLogicos])
+parseImplies expressao = do
+    (expressaoParcial, restante) <- parseOr expressao
+    parseRightOperadores expressaoParcial OPImplies Implies parseImplies restante
+
+parseOr :: [OperadoresLogicos] -> Either String (VariavelLogica, [OperadoresLogicos])
+parseOr expressao = do
+    (expressaoParcial, restante) <- parseAnd expressao
+    parseRightOperadores expressaoParcial OPOr Or parseOr restante
+
+parseAnd :: [OperadoresLogicos] -> Either String (VariavelLogica, [OperadoresLogicos])
+parseAnd expressao = do
+    (expressaoParcial, restante) <- parseNot expressao
+    parseRightOperadores expressaoParcial OPAnd And parseAnd restante
+
+parseNot :: [OperadoresLogicos] -> Either String (VariavelLogica, [OperadoresLogicos])
+parseNot (OPNot : restante)  = do
+    (expressaoNegada, restoExpressao) <- parseNot restante
+    Right (Not expressaoNegada, restoExpressao)
+parseNot expressao = parseTermo expressao
+
+parseTermo :: [OperadoresLogicos] -> Either String (VariavelLogica, [OperadoresLogicos])
+parseTermo (OPVar variavel : restante) = Right (Var variavel, restante)
+parseTermo (OPAbreParenteses : restante) = do
+    (expressaoAgrupada, expressoesRestantes) <- parseBiconditional restante
+    case expressoesRestantes of
+        (OPFechaParenteses : restante') -> Right (expressaoAgrupada, restante')
+        _                            -> Left "Parêntese não fechado"
+parseTermo _ = Left "Expressão inválida"
+
+{-
+exemplos em parenteses
+    essa funcao pega uma variavel logica analisada(A), 
+    OperadoresLogicos(OPAnd),
+    a definicao/type da variavel logica( no caso And VariavelLogica VariavelLogica, por exemplo)
+    a funcao de parse do operador logico(parseAnd),
+    resto da expressao logica
+
+-}
+parseRightOperadores :: VariavelLogica -> OperadoresLogicos -> (VariavelLogica -> VariavelLogica -> VariavelLogica) -> ([OperadoresLogicos] -> Either String (VariavelLogica, [OperadoresLogicos])) -> [OperadoresLogicos] -> Either String (VariavelLogica, [OperadoresLogicos])
+parseRightOperadores expressaoParcial operadorDireita construtorDeOperador nextParser expressao = case expressao of
+    (proximoOperador : restante) | proximoOperador == operadorDireita -> do
+        (expressaoRestante, resto) <- nextParser restante
+        Right (construtorDeOperador expressaoParcial expressaoRestante, resto)
+    _ -> Right (expressaoParcial, expressao)
+
+
+-- Função para imprimir a expressão lógica após o parse
+printExpr :: String -> IO ()
+printExpr expressao = do
+    let resultado = parseToOperadoresLogicos expressao
+    case resultado of
+        Right parsed -> print  parsed
+        Left erro -> putStrLn erro
+
+
+    
+    
+-- A função verifica o valor da proposição dada uma lista de variáveis e seus valores.
+avaliar :: VariavelLogica -> [(Char, Bool)] -> Bool
+avaliar (Var x) valores = case lookup x valores of
+    Just v -> v
+    Nothing -> error $ "Variável não atribuída: " ++ [x]
+avaliar (Not p) valores = not (avaliar p valores)
+avaliar (And p q) valores = (avaliar p valores) && (avaliar q valores)
+avaliar (Or p q) valores = (avaliar p valores) || (avaliar q valores)
+avaliar (Implies p q) valores = not (avaliar p valores) || (avaliar q valores)
+avaliar (Biconditional p q) valores = (avaliar p valores) == (avaliar q valores)
+
+-- Função que obtém as variáveis presentes em uma proposição
+-- Essa função retorna uma lista com as variáveis proposicionais usadas na proposição.
+obterVariaveis :: VariavelLogica -> [Char]
+obterVariaveis (Var x) = [x]
+obterVariaveis (Not p) = obterVariaveis p
+obterVariaveis (And p q) = obterVariaveis p ++ obterVariaveis q
+obterVariaveis (Or p q) = obterVariaveis p ++ obterVariaveis q
+obterVariaveis (Implies p q) = obterVariaveis p ++ obterVariaveis q
+obterVariaveis (Biconditional p q) = obterVariaveis p ++ obterVariaveis q
+
+-- Remove duplicatas de uma lista de variáveis
+-- A função 'nub' é usada para garantir que cada variável apareça apenas uma vez.
+removeDuplicatas :: [Char] -> [Char]
+removeDuplicatas = nub
+
+-- Gera todas as combinações possíveis de valores (True/False) para as variáveis
+-- A função cria todas as combinações binárias possíveis para uma lista de variáveis.
+gerarCombinacoes :: [Char] -> [[(Char, Bool)]] 
+gerarCombinacoes [] = [[]]
+gerarCombinacoes (x:xs) =
+    [(x, True) : resto | resto <- gerarCombinacoes xs] ++
+    [(x, False) : resto | resto <- gerarCombinacoes xs]
+
+-- Função que encontra uma atribuição de valores que satisfaz a proposição
+-- A função retorna a primeira combinação que torna a proposição verdadeira.
+encontrarSatisfacao :: VariavelLogica -> [[(Char, Bool)]] -> Maybe [(Char, Bool)]
+encontrarSatisfacao operadoresLogicos combinacoes =
+    find (\valores -> avaliar operadoresLogicos valores) combinacoes
+
+-- Função que encontra uma atribuição que falsifica a proposição
+-- A função retorna a primeira combinação que torna a proposição falsa.
+encontrarFalsificacao :: VariavelLogica -> [[(Char, Bool)]] -> Maybe [(Char, Bool)]
+encontrarFalsificacao operadoresLogicos combinacoes =
+    find (\valores -> not (avaliar operadoresLogicos valores)) combinacoes
+
+-- Função que verifica se a proposição é uma contingência
+-- A proposição é uma contingência se for verdadeira para algumas atribuições e falsa para outras.
+ehContingencia :: VariavelLogica -> Bool
+ehContingencia operadoresLogicos =
+    let variaveis = obterVariaveis operadoresLogicos
+        combinacoes = gerarCombinacoes (removeDuplicatas variaveis)
+        resultados = [avaliar operadoresLogicos valores | valores <- combinacoes]
+    in any id resultados && any not resultados
+
+-- Função que imprime a tabela verdade de uma proposição lógica
+-- A tabela verdade mostra o resultado da proposição para todas as combinações de valores.
+imprimirTabelaVerdadeComExemplos :: VariavelLogica -> IO ()
+imprimirTabelaVerdadeComExemplos operadoresLogicos = do
+    let variaveis = removeDuplicatas (obterVariaveis operadoresLogicos)
+        combinacoes = gerarCombinacoes variaveis
+        resultados = [avaliar operadoresLogicos valores | valores <- combinacoes]
+
+    -- Imprime a tabela verdade
+    putStrLn $ unwords (map (:[]) variaveis ++ ["Resultado"])
+    mapM_ (\(valores, resultado) -> do
+        let valoresStr = unwords [show v ++ "=" ++ show b | (v, b) <- valores]
+        putStrLn $ valoresStr ++ " " ++ show resultado) (zip combinacoes resultados)
+
+    -- LaTeX da tabela verdade
+    putStrLn "\nTabela Verdade em LaTeX:"
+    putStrLn "\\begin{array}{|c|c|c|c|}"
+    putStrLn "\\hline"
+    putStrLn $ unwords (map (:[]) variaveis) ++ " & Resultado \\\\"
+    putStrLn "\\hline"
+    mapM_ (\(valores, resultado) -> do
+        let valoresStr = unwords [show v ++ "=" ++ show b | (v, b) <- valores]
+        putStrLn $ valoresStr ++ " & " ++ show resultado ++ " \\\\" ) (zip combinacoes resultados)
+    putStrLn "\\hline"
+    
+    -- Verifica se a proposição é uma contingência
+    if ehContingencia operadoresLogicos then do
+        let satisfacao = encontrarSatisfacao operadoresLogicos combinacoes
+            falsificacao = encontrarFalsificacao operadoresLogicos combinacoes
+        case satisfacao of
+            Just s -> putStrLn $ "Atribuição que satisfaz a expressão: " ++ show s
+            Nothing -> putStrLn "Nenhuma atribuição satisfaz a expressão."
+        case falsificacao of
+            Just f -> putStrLn $ "Atribuição que falsifica a expressão: " ++ show f
+            Nothing -> putStrLn "Nenhuma atribuição falsifica a expressão."
+    else putStrLn "A proposição não é uma contingência."
+
+-- Função para converter a proposição para uma string normal
+-- Converte a proposição para uma forma de string legível.
+toNormal :: VariavelLogica -> String
+toNormal (Var x) = [x]
+toNormal (Not p) = "~" ++ toNormal p
+toNormal (And p q) = "(" ++ toNormal p ++ " ∧ " ++ toNormal q ++ ")"
+toNormal (Or p q) = "(" ++ toNormal p ++ " ∨ " ++ toNormal q ++ ")"
+toNormal (Implies p q) = "(" ++ toNormal p ++ " → " ++ toNormal q ++ ")"
+toNormal (Biconditional p q) = "(" ++ toNormal p ++ " ↔ " ++ toNormal q ++ ")"
+
+-- Função para classificar a proposição (contingência, tautologia, contradição)
+-- Classifica a proposição como uma tautologia, contradição ou contingência.
+classificarProposicao :: VariavelLogica -> String
+classificarProposicao operadoresLogicos
+    | all id resultados = "Tautologia"
+    | all not resultados = "Contradição"
+    | otherwise = "Contingência"
+  where
+    variaveis = removeDuplicatas (obterVariaveis operadoresLogicos)
+    combinacoes = gerarCombinacoes variaveis
+    resultados = [avaliar operadoresLogicos valores | valores <- combinacoes]
+
+-- Função principal para realizar testes com uma proposição de exemplo
+-- Proposições que usamos para testes "Or (And (Not (Var 'P')) (Var 'Q')) (Var 'P') // Implies (Or (And (Var 'A') (Var 'B')) (Not (Var 'C'))) (Var 'D') // And (Implies (Var 'P') (Var 'Q')) (Or (Not (Var 'P')) (Var 'R'))"
+-- Exemplos de teste
+main :: IO ()
+main = do
+    putStrLn "Digite abaixo a expressão de lógica proposicional:"
+    entrada <- getLine
+    case parseExpression entrada of
+        Right expressao -> do
+            putStrLn $ "Expressão lógica parseada: " ++ show expressao
+            putStrLn $ "Expressão em formato normal: " ++ toNormal expressao
+            putStrLn $ "Classificação: " ++ classificarProposicao expressao
+            putStrLn "Tabela Verdade com exemplos:"
+            imprimirTabelaVerdadeComExemplos expressao
+        Left erro -> putStrLn $ "Erro: " ++ erro
+
