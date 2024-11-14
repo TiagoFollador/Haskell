@@ -1,3 +1,7 @@
+import Data.List (nub, find)
+
+-- Definição do tipo Prop para proposições lógicas
+
 import Data.Char (isUpper)
 
 {-
@@ -174,14 +178,136 @@ printExpr expressao = do
         Right parsed -> print  parsed
         Left erro -> putStrLn erro
 
+
+    
+    
+-- A função verifica o valor da proposição dada uma lista de variáveis e seus valores.
+avaliar :: VariavelLogica -> [(Char, Bool)] -> Bool
+avaliar (Var x) valores = case lookup x valores of
+    Just v -> v
+    Nothing -> error $ "Variável não atribuída: " ++ [x]
+avaliar (Not p) valores = not (avaliar p valores)
+avaliar (And p q) valores = (avaliar p valores) && (avaliar q valores)
+avaliar (Or p q) valores = (avaliar p valores) || (avaliar q valores)
+avaliar (Implies p q) valores = not (avaliar p valores) || (avaliar q valores)
+avaliar (Biconditional p q) valores = (avaliar p valores) == (avaliar q valores)
+
+-- Função que obtém as variáveis presentes em uma proposição
+-- Essa função retorna uma lista com as variáveis proposicionais usadas na proposição.
+obterVariaveis :: VariavelLogica -> [Char]
+obterVariaveis (Var x) = [x]
+obterVariaveis (Not p) = obterVariaveis p
+obterVariaveis (And p q) = obterVariaveis p ++ obterVariaveis q
+obterVariaveis (Or p q) = obterVariaveis p ++ obterVariaveis q
+obterVariaveis (Implies p q) = obterVariaveis p ++ obterVariaveis q
+obterVariaveis (Biconditional p q) = obterVariaveis p ++ obterVariaveis q
+
+-- Remove duplicatas de uma lista de variáveis
+-- A função 'nub' é usada para garantir que cada variável apareça apenas uma vez.
+removeDuplicatas :: [Char] -> [Char]
+removeDuplicatas = nub
+
+-- Gera todas as combinações possíveis de valores (True/False) para as variáveis
+-- A função cria todas as combinações binárias possíveis para uma lista de variáveis.
+gerarCombinacoes :: [Char] -> [[(Char, Bool)]] 
+gerarCombinacoes [] = [[]]
+gerarCombinacoes (x:xs) =
+    [(x, True) : resto | resto <- gerarCombinacoes xs] ++
+    [(x, False) : resto | resto <- gerarCombinacoes xs]
+
+-- Função que encontra uma atribuição de valores que satisfaz a proposição
+-- A função retorna a primeira combinação que torna a proposição verdadeira.
+encontrarSatisfacao :: VariavelLogica -> [[(Char, Bool)]] -> Maybe [(Char, Bool)]
+encontrarSatisfacao operadoresLogicos combinacoes =
+    find (\valores -> avaliar operadoresLogicos valores) combinacoes
+
+-- Função que encontra uma atribuição que falsifica a proposição
+-- A função retorna a primeira combinação que torna a proposição falsa.
+encontrarFalsificacao :: VariavelLogica -> [[(Char, Bool)]] -> Maybe [(Char, Bool)]
+encontrarFalsificacao operadoresLogicos combinacoes =
+    find (\valores -> not (avaliar operadoresLogicos valores)) combinacoes
+
+-- Função que verifica se a proposição é uma contingência
+-- A proposição é uma contingência se for verdadeira para algumas atribuições e falsa para outras.
+ehContingencia :: VariavelLogica -> Bool
+ehContingencia operadoresLogicos =
+    let variaveis = obterVariaveis operadoresLogicos
+        combinacoes = gerarCombinacoes (removeDuplicatas variaveis)
+        resultados = [avaliar operadoresLogicos valores | valores <- combinacoes]
+    in any id resultados && any not resultados
+
+-- Função que imprime a tabela verdade de uma proposição lógica
+-- A tabela verdade mostra o resultado da proposição para todas as combinações de valores.
+imprimirTabelaVerdadeComExemplos :: VariavelLogica -> IO ()
+imprimirTabelaVerdadeComExemplos operadoresLogicos = do
+    let variaveis = removeDuplicatas (obterVariaveis operadoresLogicos)
+        combinacoes = gerarCombinacoes variaveis
+        resultados = [avaliar operadoresLogicos valores | valores <- combinacoes]
+
+    -- Imprime a tabela verdade
+    putStrLn $ unwords (map (:[]) variaveis ++ ["Resultado"])
+    mapM_ (\(valores, resultado) -> do
+        let valoresStr = unwords [show v ++ "=" ++ show b | (v, b) <- valores]
+        putStrLn $ valoresStr ++ " " ++ show resultado) (zip combinacoes resultados)
+
+    -- LaTeX da tabela verdade
+    putStrLn "\nTabela Verdade em LaTeX:"
+    putStrLn "\\begin{array}{|c|c|c|c|}"
+    putStrLn "\\hline"
+    putStrLn $ unwords (map (:[]) variaveis) ++ " & Resultado \\\\"
+    putStrLn "\\hline"
+    mapM_ (\(valores, resultado) -> do
+        let valoresStr = unwords [show v ++ "=" ++ show b | (v, b) <- valores]
+        putStrLn $ valoresStr ++ " & " ++ show resultado ++ " \\\\" ) (zip combinacoes resultados)
+    putStrLn "\\hline"
+    
+    -- Verifica se a proposição é uma contingência
+    if ehContingencia operadoresLogicos then do
+        let satisfacao = encontrarSatisfacao operadoresLogicos combinacoes
+            falsificacao = encontrarFalsificacao operadoresLogicos combinacoes
+        case satisfacao of
+            Just s -> putStrLn $ "Atribuição que satisfaz a expressão: " ++ show s
+            Nothing -> putStrLn "Nenhuma atribuição satisfaz a expressão."
+        case falsificacao of
+            Just f -> putStrLn $ "Atribuição que falsifica a expressão: " ++ show f
+            Nothing -> putStrLn "Nenhuma atribuição falsifica a expressão."
+    else putStrLn "A proposição não é uma contingência."
+
+-- Função para converter a proposição para uma string normal
+-- Converte a proposição para uma forma de string legível.
+toNormal :: VariavelLogica -> String
+toNormal (Var x) = [x]
+toNormal (Not p) = "~" ++ toNormal p
+toNormal (And p q) = "(" ++ toNormal p ++ " ∧ " ++ toNormal q ++ ")"
+toNormal (Or p q) = "(" ++ toNormal p ++ " ∨ " ++ toNormal q ++ ")"
+toNormal (Implies p q) = "(" ++ toNormal p ++ " → " ++ toNormal q ++ ")"
+toNormal (Biconditional p q) = "(" ++ toNormal p ++ " ↔ " ++ toNormal q ++ ")"
+
+-- Função para classificar a proposição (contingência, tautologia, contradição)
+-- Classifica a proposição como uma tautologia, contradição ou contingência.
+classificarProposicao :: VariavelLogica -> String
+classificarProposicao operadoresLogicos
+    | all id resultados = "Tautologia"
+    | all not resultados = "Contradição"
+    | otherwise = "Contingência"
+  where
+    variaveis = removeDuplicatas (obterVariaveis operadoresLogicos)
+    combinacoes = gerarCombinacoes variaveis
+    resultados = [avaliar operadoresLogicos valores | valores <- combinacoes]
+
+-- Função principal para realizar testes com uma proposição de exemplo
+-- Proposições que usamos para testes "Or (And (Not (Var 'P')) (Var 'Q')) (Var 'P') // Implies (Or (And (Var 'A') (Var 'B')) (Not (Var 'C'))) (Var 'D') // And (Implies (Var 'P') (Var 'Q')) (Or (Not (Var 'P')) (Var 'R'))"
 -- Exemplos de teste
 main :: IO ()
 main = do
     putStrLn "Digite abaixo a expressão de lógica proposicional:"
-    expressao <- getLine
-    case parseExpression expressao of
-        Right expressao -> putStrLn $ "Expressão lógica: " ++ show expressao
-        Left erro   -> putStrLn $ "Erro: " ++ erro
+    entrada <- getLine
+    case parseExpression entrada of
+        Right expressao -> do
+            putStrLn $ "Expressão lógica parseada: " ++ show expressao
+            putStrLn $ "Expressão em formato normal: " ++ toNormal expressao
+            putStrLn $ "Classificação: " ++ classificarProposicao expressao
+            putStrLn "Tabela Verdade com exemplos:"
+            imprimirTabelaVerdadeComExemplos expressao
+        Left erro -> putStrLn $ "Erro: " ++ erro
 
-    
-    
