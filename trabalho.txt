@@ -68,8 +68,11 @@ parseToOperadoresLogicos (h:t)
 
 {-
 
-Essa funcao é responsavel por pegar a entrada do usuario e modificar para 
-Operadores logicos, colocando-os em uma notacao similar a calculo lambda
+Essa funcao é responsavel por interpretar a entrada do usuario e passar para 
+Operadores logicos, colocando-os em uma notacao similar a calculo lambda.
+
+primeiro passa a entrada para uma lista de operadoresLogicos, apos isso, passa
+a lista para o formato de VariavelLogica
 
 A and B fica and (A B) 
 
@@ -82,7 +85,7 @@ parseExpression expressaoLogicaEntrada = do
 
 
 toVariavelLogica :: [OperadoresLogicos] -> Either String VariavelLogica
-toVariavelLogica expressaoLogica = parseExpressaoToLambda expressaoLogica
+toVariavelLogica expressao = parseExpressaoLogica expressao
 
 
 
@@ -93,10 +96,10 @@ toVariavelLogica expressaoLogica = parseExpressaoToLambda expressaoLogica
     uma bicondicional, conforme as prioridades)
 
 -}
-parseExpressaoToLambda :: [OperadoresLogicos] -> Either String VariavelLogica
-parseExpressaoToLambda expressaoLogica = case parseBiconditional expressaoLogica of
-    Right (expressaoLogicaRetornada, []) -> Right expressaoLogicaRetornada
-    Right (_, operadoresRestantes)   -> Left ("Tokens remanescentes: " ++ show operadoresRestantes)
+parseExpressaoLogica :: [OperadoresLogicos] -> Either String VariavelLogica
+parseExpressaoLogica expressao = case parseBiconditional expressao of
+    Right (expressaoFinal, []) -> Right expressaoFinal
+    Right (_, expressoesNaoProcessadas)   -> Left ("Elementos remanescentes: " ++ show expressoesNaoProcessadas)
     Left erro        -> Left erro
 
 {-
@@ -112,39 +115,39 @@ um case left(caso erro) right(caso aja certo)
 
 
 parseBiconditional :: [OperadoresLogicos] -> Either String (VariavelLogica, [OperadoresLogicos])
-parseBiconditional expressaoLogica = do
-    (expressaoLogicaAnalisada, resto) <- parseImplies expressaoLogica
-    parseRightOperadores expressaoLogicaAnalisada OPBiconditional Biconditional parseBiconditional resto
+parseBiconditional expressao = do
+    (expressaoParcial, restante) <- parseImplies expressao
+    parseRightOperadores expressaoParcial OPBiconditional Biconditional parseBiconditional restante
     
 parseImplies :: [OperadoresLogicos] -> Either String (VariavelLogica, [OperadoresLogicos])
-parseImplies expressaoLogica = do
-    (expressaoLogicaAnalisada, resto) <- parseOr expressaoLogica
-    parseRightOperadores expressaoLogicaAnalisada OPImplies Implies parseImplies resto
+parseImplies expressao = do
+    (expressaoParcial, restante) <- parseOr expressao
+    parseRightOperadores expressaoParcial OPImplies Implies parseImplies restante
 
 parseOr :: [OperadoresLogicos] -> Either String (VariavelLogica, [OperadoresLogicos])
-parseOr expressaoLogica = do
-    (expressaoLogicaAnalisada, resto) <- parseAnd expressaoLogica
-    parseRightOperadores expressaoLogicaAnalisada OPOr Or parseOr resto
+parseOr expressao = do
+    (expressaoParcial, restante) <- parseAnd expressao
+    parseRightOperadores expressaoParcial OPOr Or parseOr restante
 
 parseAnd :: [OperadoresLogicos] -> Either String (VariavelLogica, [OperadoresLogicos])
-parseAnd expressaoLogica = do
-    (expressaoLogicaAnalisada, resto) <- parseNot expressaoLogica
-    parseRightOperadores expressaoLogicaAnalisada OPAnd And parseAnd resto
+parseAnd expressao = do
+    (expressaoParcial, restante) <- parseNot expressao
+    parseRightOperadores expressaoParcial OPAnd And parseAnd restante
 
 parseNot :: [OperadoresLogicos] -> Either String (VariavelLogica, [OperadoresLogicos])
-parseNot (OPNot : resto)  = do
-    (expressaoLogicaAnalisada, expressoesRestantes) <- parseNot resto
-    Right (Not expressaoLogicaAnalisada, expressoesRestantes)
-parseNot expressaoLogica = parseTerm expressaoLogica
+parseNot (OPNot : restante)  = do
+    (expressaoNegada, restoExpressao) <- parseNot restante
+    Right (Not expressaoNegada, restoExpressao)
+parseNot expressao = parseTermo expressao
 
-parseTerm :: [OperadoresLogicos] -> Either String (VariavelLogica, [OperadoresLogicos])
-parseTerm (OPVar variavelLogica : resto) = Right (Var variavelLogica, resto)
-parseTerm (OPAbreParenteses : resto) = do
-    (expressaoLogicaAnalisada, expressoesRestantes) <- parseBiconditional resto
+parseTermo :: [OperadoresLogicos] -> Either String (VariavelLogica, [OperadoresLogicos])
+parseTermo (OPVar variavel : restante) = Right (Var variavel, restante)
+parseTermo (OPAbreParenteses : restante) = do
+    (expressaoAgrupada, expressoesRestantes) <- parseBiconditional restante
     case expressoesRestantes of
-        (OPFechaParenteses : resto') -> Right (expressaoLogicaAnalisada, resto')
+        (OPFechaParenteses : restante') -> Right (expressaoAgrupada, restante')
         _                            -> Left "Parêntese não fechado"
-parseTerm _ = Left "Expressão inválida"
+parseTermo _ = Left "Expressão inválida"
 
 {-
 exemplos em parenteses
@@ -156,18 +159,18 @@ exemplos em parenteses
 
 -}
 parseRightOperadores :: VariavelLogica -> OperadoresLogicos -> (VariavelLogica -> VariavelLogica -> VariavelLogica) -> ([OperadoresLogicos] -> Either String (VariavelLogica, [OperadoresLogicos])) -> [OperadoresLogicos] -> Either String (VariavelLogica, [OperadoresLogicos])
-parseRightOperadores variavelLogicaAnalisada operadorDireita construtorDeOperador nextParser expressaoLogica = case expressaoLogica of
-    (proximoOperador : resto) | proximoOperador == operadorDireita -> do
-        (variavelLogicaRestante, expressoesRestantes) <- nextParser resto
-        Right (construtorDeOperador variavelLogicaAnalisada variavelLogicaRestante, expressoesRestantes)
-    _ -> Right (variavelLogicaAnalisada, expressaoLogica)
+parseRightOperadores expressaoParcial operadorDireita construtorDeOperador nextParser expressao = case expressao of
+    (proximoOperador : restante) | proximoOperador == operadorDireita -> do
+        (expressaoRestante, resto) <- nextParser restante
+        Right (construtorDeOperador expressaoParcial expressaoRestante, resto)
+    _ -> Right (expressaoParcial, expressao)
 
 
 -- Função para imprimir a expressão lógica após o parse
 printExpr :: String -> IO ()
-printExpr expr = do
-    let result = parseToOperadoresLogicos expr
-    case result of
+printExpr expressao = do
+    let resultado = parseToOperadoresLogicos expressao
+    case resultado of
         Right parsed -> print  parsed
         Left erro -> putStrLn erro
 
@@ -175,8 +178,8 @@ printExpr expr = do
 main :: IO ()
 main = do
     putStrLn "Digite abaixo a expressão de lógica proposicional:"
-    expressaoLogica <- getLine
-    case parseExpression expressaoLogica of
+    expressao <- getLine
+    case parseExpression expressao of
         Right expressao -> putStrLn $ "Expressão lógica: " ++ show expressao
         Left erro   -> putStrLn $ "Erro: " ++ erro
 
